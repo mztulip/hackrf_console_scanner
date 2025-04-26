@@ -21,6 +21,7 @@
 
 #include <signal.h>
 #include <math.h>
+#include "filter.h"
 
 /*
 a już wiem dlaczego na SDRrze  do dupy widać ramki. A na nrf51 i efr prosty skaner na rssi.
@@ -46,7 +47,7 @@ A moc obliczam z próbek IQ,  a sampluje to 20MHZ. Więc tutaj jeszcze jakiegoś
 bool one_shot = false;
 bool finite_mode = false;
 const int DEFAULT_SAMPLE_RATE_HZ = (20000000); /* 20MHz default sample rate */
-const int DEFAULT_BASEBAND_FILTER_BANDWIDTH = (2000000); /* 2MHz default dostępne 2.25Mhz */
+const int DEFAULT_BASEBAND_FILTER_BANDWIDTH = (2500000); /* 2MHz default dostępne 2.5Mhz */
 const int FREQ_ONE_MHZ = (1000000ull);
 
 static bool do_exit = false;
@@ -55,7 +56,7 @@ unsigned int lna_gain = 2*8, vga_gain = 40; //14
 //przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
 //Przy 50dB poziom szumu zaczyna się podnosić.
 //Przy 60dB juz jest 10dB wyżej.
-int iqSize = 20;
+int iqSize = 200;
 
 volatile uint32_t byte_count = 0;
 volatile uint64_t sweep_count = 0;
@@ -130,10 +131,12 @@ void print_colored(int16_t value, int16_t min, int16_t max)
     {
         color_index = colors_count-1;
     }
-    // printf(" \033[%dm %d", colors_vt100[color_index],value);
     printf("\033[48;5;%dm ", colors_vt100[color_index]);
 }
 
+// http://t-filter.engineerjs.com/
+
+SampleFilter filter;
 int rx_callback(hackrf_transfer* transfer)
 {
 	int i,j;
@@ -218,10 +221,18 @@ int rx_callback(hackrf_transfer* transfer)
 		float squares_sum = 0;
 
 		buf += BYTES_PER_BLOCK - (iqSize * 2);
-		for (i = 0; i < iqSize; i++) {
-			float i_sample= buf[i * 2]/128.0;
-			float q_sample = buf[i * 2 + 1]/128.0;
-			float v_peak = sqrt(i_sample*i_sample+q_sample*q_sample);
+
+		
+		SampleFilter_init(&filter);
+		for (i = 0; i < iqSize; i++) 
+		{
+			float i_sample= buf[i * 2]/255.0;
+			float q_sample = buf[i * 2 + 1]/255.0;
+			SampleFilter_put(&filter, i_sample, q_sample);
+			float filtered_i, filtered_q;
+			SampleFilter_get(&filter,&filtered_i,&filtered_q);
+			float v_peak = sqrt(filtered_i*filtered_i+filtered_q*filtered_q);
+			// float v_peak = sqrt(i_sample*i_sample+q_sample*q_sample);
 			squares_sum += v_peak*v_peak;
 
 		}
@@ -231,7 +242,7 @@ int rx_callback(hackrf_transfer* transfer)
 		//Logarithm refered to ADC LSB 10*log(adc_rms_raw/adc_LSB)
 		float raw_log = 10*log(v_rms/1);
 		// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
-		print_colored((int16_t)(raw_log), -40, 10);
+		print_colored((int16_t)(raw_log), -40, 0);
 	}
 	return 0;
 }
