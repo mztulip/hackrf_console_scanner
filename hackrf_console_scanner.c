@@ -56,7 +56,7 @@ unsigned int lna_gain = 2*8, vga_gain = 40; //14
 //przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
 //Przy 50dB poziom szumu zaczyna się podnosić.
 //Przy 60dB juz jest 10dB wyżej.
-int iqSize = 200;
+int iqSize = 300;
 
 volatile uint32_t byte_count = 0;
 volatile uint64_t sweep_count = 0;
@@ -78,7 +78,7 @@ void sigint_callback_handler(int signum)
 }
 
 int32_t marker_pos = 0;
-int32_t marker_range = 125;
+int32_t marker_range = 200;
 
 void draw_frequency_scale(void)
 {
@@ -136,7 +136,7 @@ void print_colored(int16_t value, int16_t min, int16_t max)
 
 // http://t-filter.engineerjs.com/
 
-SampleFilter filter;
+IIRFilter filter;
 int rx_callback(hackrf_transfer* transfer)
 {
 	int i,j;
@@ -221,24 +221,26 @@ int rx_callback(hackrf_transfer* transfer)
 		float squares_sum = 0;
 
 		buf += BYTES_PER_BLOCK - (iqSize * 2);
-
 		
-		SampleFilter_init(&filter);
+		IIRFilter_init(&filter);
 		for (i = 0; i < iqSize; i++) 
 		{
 			float i_sample= buf[i * 2]/255.0;
 			float q_sample = buf[i * 2 + 1]/255.0;
-			SampleFilter_put(&filter, i_sample, q_sample);
+
+			IIRFilter_put(&filter, i_sample, q_sample);
 			float filtered_i, filtered_q;
-			SampleFilter_get(&filter,&filtered_i,&filtered_q);
-			float v_peak = sqrt(filtered_i*filtered_i+filtered_q*filtered_q);
-			// float v_peak = sqrt(i_sample*i_sample+q_sample*q_sample);
-			squares_sum += v_peak*v_peak;
+			IIRFilter_get(&filter,&filtered_i,&filtered_q);
+			//Ignore first filter length outputs samples, due to initial conditions
+			if (i > IIRFilter_TAP_NUM)
+			{
+				float v_peak = sqrt(filtered_i*filtered_i+filtered_q*filtered_q);
+				squares_sum += v_peak*v_peak;
+			}
 
 		}
 		buf += iqSize * 2;
 		float v_rms = sqrt(squares_sum/iqSize);
-		// float power50r = v_rms*v_rms/50;
 		//Logarithm refered to ADC LSB 10*log(adc_rms_raw/adc_LSB)
 		float raw_log = 10*log(v_rms/1);
 		// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
@@ -381,7 +383,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	// draw_header();
+	draw_header();
 	while((hackrf_is_streaming(device) == HACKRF_TRUE) && (do_exit == false))
 	{
 
