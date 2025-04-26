@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "filter.h"
 
+// https://schaumont.dyn.wpi.edu/ece4703b20/lecture4.html
 void IIRFilter_init(IIRFilter* f) 
 {
   int i;

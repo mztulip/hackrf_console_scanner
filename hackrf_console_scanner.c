@@ -56,7 +56,7 @@ unsigned int lna_gain = 2*8, vga_gain = 40; //14
 //przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
 //Przy 50dB poziom szumu zaczyna się podnosić.
 //Przy 60dB juz jest 10dB wyżej.
-int iqSize = 300;
+int iqSize = 400;
 
 volatile uint32_t byte_count = 0;
 volatile uint64_t sweep_count = 0;
@@ -148,8 +148,6 @@ int rx_callback(hackrf_transfer* transfer)
 
 	if (do_exit) {return 0;}
 
-
-
 	for (j = 0; j < BLOCKS_PER_TRANSFER; j++)
 	{
 		ubuf = (uint8_t*) buf;
@@ -169,7 +167,6 @@ int rx_callback(hackrf_transfer* transfer)
 			buf += BYTES_PER_BLOCK;
 			continue;
 		}
-
 
 		//Tutaj ladujemy gdy jest to blok poczatkowy z informacja o czestotliwosci
 
@@ -220,6 +217,7 @@ int rx_callback(hackrf_transfer* transfer)
 		float block_power = 0.0;
 		float squares_sum = 0;
 
+		// printf("\n\rSamples to use: %d", BYTES_PER_BLOCK-10);
 		buf += BYTES_PER_BLOCK - (iqSize * 2);
 		
 		IIRFilter_init(&filter);

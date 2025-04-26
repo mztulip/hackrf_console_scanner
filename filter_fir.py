@@ -25,7 +25,7 @@ nyq_rate = sample_rate / 2.0
 width = 400000.0/nyq_rate
 
 # The desired attenuation in the stop band, in dB.
-ripple_db = 40.0
+ripple_db = 70.0
 
 # Compute the order and Kaiser parameter for the FIR filter.
 N, beta = kaiserord(ripple_db, width)
@@ -89,9 +89,11 @@ grid(visible=True, which='both')
 nsamples = 400
 base_freq = 100_000
 t = arange(nsamples) / sample_rate
-x = cos(2*pi*base_freq*t) + 0.2*sin(2*pi*2.5*base_freq*t+0.1) + \
-        0.2*sin(2*pi*base_freq*15.3*t) + 0.1*sin(2*pi*16.7*base_freq*t + 0.1) + \
-            0.1*sin(2*pi*base_freq*23.45*t+.8)
+# x = cos(2*pi*base_freq*t) + 0.2*sin(2*pi*2.5*base_freq*t+0.1) + \
+#         0.2*sin(2*pi*base_freq*15.3*t) + 0.1*sin(2*pi*16.7*base_freq*t + 0.1) + \
+#             0.1*sin(2*pi*base_freq*23.45*t+.8) 
+
+x = 200*sin(2*pi*1_000_000*t)
 
 # Use lfilter to filter x with the FIR filter.
 filtered_x = lfilter(taps, 1.0, x)
