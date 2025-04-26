@@ -47,16 +47,16 @@ A moc obliczam z próbek IQ,  a sampluje to 20MHZ. Więc tutaj jeszcze jakiegoś
 bool one_shot = false;
 bool finite_mode = false;
 const int DEFAULT_SAMPLE_RATE_HZ = (20000000); /* 20MHz default sample rate */
-const int DEFAULT_BASEBAND_FILTER_BANDWIDTH = (2500000); /* 2MHz default dostępne 2.5Mhz */
+const int DEFAULT_BASEBAND_FILTER_BANDWIDTH = (1000000); /* 1.75MHz default  */
 const int FREQ_ONE_MHZ = (1000000ull);
 
 static bool do_exit = false;
 static hackrf_device* device = NULL;
-unsigned int lna_gain = 2*8, vga_gain = 40; //14
+unsigned int lna_gain = 0, vga_gain = 40; //14
 //przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
 //Przy 50dB poziom szumu zaczyna się podnosić.
 //Przy 60dB juz jest 10dB wyżej.
-int iqSize = 400;
+int iqSize = 1000;
 
 volatile uint32_t byte_count = 0;
 volatile uint64_t sweep_count = 0;
@@ -365,7 +365,7 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
-	bool amp = true;
+	bool amp = false;
 	uint32_t amp_enable=1;
 	
 	//To daje 14dB

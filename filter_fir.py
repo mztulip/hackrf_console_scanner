@@ -21,8 +21,8 @@ nyq_rate = sample_rate / 2.0
 
 # The desired width of the transition from pass to stop,
 # relative to the Nyquist rate.  We'll design the filter
-# with a 10000 Hz transition width.
-width = 400000.0/nyq_rate
+# with a ... Hz transition width.
+width = 200000.0/nyq_rate
 
 # The desired attenuation in the stop band, in dB.
 ripple_db = 70.0
@@ -31,7 +31,7 @@ ripple_db = 70.0
 N, beta = kaiserord(ripple_db, width)
 
 # The cutoff frequency of the filter.
-cutoff_hz = 900_000.0
+cutoff_hz = 400_000.0
 
 # Use firwin with a Kaiser window to create a lowpass FIR filter.
 taps = firwin(N, cutoff_hz/nyq_rate, window=('kaiser', beta))
