@@ -54,6 +54,7 @@ int OFFSET = 0;
 unsigned int lna_gain;
 unsigned int vga_gain;
 int baseband_filter; 
+bool fir_enabled = false;
 
 static bool do_exit = false;
 static hackrf_device* device = NULL;
@@ -102,8 +103,10 @@ void draw_frequency_scale(void)
   	}
 }
 
-void draw_header(void)
+void draw_header(int start_freq, int stop_freq, int step_freq)
 {
+    char str_buffer[100];
+
 	// https://github.com/0x5c/VT100-Examples/blob/master/vt_seq.md
 	// Helpful document for VT100
 	printf("\033[!p");
@@ -112,7 +115,22 @@ void draw_header(void)
   	printf("\033[4r");
 	printf("\033[0;1H");//move cursor to row0 column1
   	printf("\033[2K"); //erase line
-  	printf("2.4GHz    2.41GHz   2.42GHz    2.43GHz  2.44GHz   2.45GHz   2.46GHz   2.47GHz   2.48GHz   2.49GHz   2.50GHz   2.51GHz   2.52GHz");
+
+    int counter = 0;
+    for(int i = start_freq; i <= stop_freq; i+=step_freq)
+    {
+        if(counter%10 == 0)
+        {
+            sprintf(str_buffer,"%dMHZ", i);
+            printf(str_buffer);
+            int chars = 10 - strlen(str_buffer);
+            for (int c = 0; c < chars; c++)
+            {
+                printf(" ");
+            }
+        }
+        counter++;
+    }
 	printf("\033[3;1H");//move cursor to row3 column1
 	printf("\033[2K"); //erase line
 	printf("\033[3;41H");//move cursor to row3 column20
@@ -226,13 +244,21 @@ int rx_callback(hackrf_transfer* transfer)
 			float i_sample= buf[i * 2]/255.0;
 			float q_sample = buf[i * 2 + 1]/255.0;
 
-			IIRFilter_put(&filter, i_sample, q_sample);
-			float filtered_i, filtered_q;
-			IIRFilter_get(&filter,&filtered_i,&filtered_q);
-			//Ignore first filter length outputs samples, due to initial conditions
-			if (i > IIRFilter_TAP_NUM)
+			if( fir_enabled )
 			{
-				float v_peak = sqrt(filtered_i*filtered_i+filtered_q*filtered_q);
+				IIRFilter_put(&filter, i_sample, q_sample);
+				float filtered_i, filtered_q;
+				IIRFilter_get(&filter,&filtered_i,&filtered_q);
+				//Ignore first filter length outputs samples, due to initial conditions
+				if (i > IIRFilter_TAP_NUM)
+				{
+					float v_peak = sqrt(filtered_i*filtered_i+filtered_q*filtered_q);
+					squares_sum += v_peak*v_peak;
+				}
+			}
+			else
+			{
+				float v_peak = sqrt(i_sample*i_sample+q_sample*q_sample);
 				squares_sum += v_peak*v_peak;
 			}
 
@@ -241,8 +267,11 @@ int rx_callback(hackrf_transfer* transfer)
 		float v_rms = sqrt(squares_sum/iqSize);
 		//Logarithm refered to ADC LSB 10*log(adc_rms_raw/adc_LSB)
 		float raw_log = 10*log(v_rms/1);
-		// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
-		print_colored((int16_t)(raw_log), min_value, max_value);
+		if(frequency%(TUNE_STEP_MHZ*1000000) == 0)
+		{
+			// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
+			print_colored((int16_t)(raw_log), min_value, max_value);
+		}
 	}
 	return 0;
 }
@@ -288,13 +317,14 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
+	int start_frequency;
+	int stop_frequency;
+	int step_frequency;
 
-
-	TUNE_STEP_MHZ = 2; 
+	start_frequency = 2400;
+	stop_frequency = 2600;
+	TUNE_STEP_MHZ = 1; 
 	OFFSET = 0;
-	frequencies[2 * num_ranges] = (uint16_t) 2400;
-	frequencies[2 * num_ranges + 1] = (uint16_t) 2600;
-	num_ranges = 1;
 	bool amp = false; //first LNA 11dB
 	lna_gain = 0; 
 	vga_gain = 40;
@@ -304,6 +334,11 @@ int main(int argc, char** argv)
 	baseband_filter = (1000000);
 	max_value = 0;
 	min_value = -40;
+	fir_enabled = true;
+
+	frequencies[2 * num_ranges] = (uint16_t) start_frequency;
+	frequencies[2 * num_ranges + 1] = (uint16_t) stop_frequency;
+	num_ranges = 1;
 
 	fprintf(stderr,
 			"call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
@@ -323,8 +358,6 @@ int main(int argc, char** argv)
 				);
 		return EXIT_FAILURE;
 	}
-
-
 
 	if (lna_gain % 8)
 	{
@@ -387,7 +420,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	draw_header();
+	draw_header(start_frequency, stop_frequency, TUNE_STEP_MHZ);
 	while((hackrf_is_streaming(device) == HACKRF_TRUE) && (do_exit == false))
 	{
 
