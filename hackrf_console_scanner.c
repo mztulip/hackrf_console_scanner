@@ -320,21 +320,39 @@ int main(int argc, char** argv)
 	int start_frequency;
 	int stop_frequency;
 	int step_frequency;
+	bool amp;
 
-	start_frequency = 2400;
-	stop_frequency = 2600;
-	TUNE_STEP_MHZ = 1; 
-	OFFSET = 0;
-	bool amp = false; //first LNA 11dB
-	lna_gain = 0; 
-	vga_gain = 40;
-	//przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
-	//Przy 50dB poziom szumu zaczyna się podnosić.
-	//Przy 60dB juz jest 10dB wyżej.
-	baseband_filter = (1000000);
-	max_value = 0;
-	min_value = -40;
-	fir_enabled = true;
+	if(argc == 2 && argv[1][0] == '5')
+	{
+		start_frequency = 5100;
+		stop_frequency = 6000;
+		TUNE_STEP_MHZ = 5; 
+		OFFSET = 0;
+		amp = false; //first LNA 11dB
+		lna_gain = 0; 
+		vga_gain = 40;
+		baseband_filter = (5000000);
+		max_value = 0;
+		min_value = -40;
+		fir_enabled = false;
+	}
+	else
+	{
+		start_frequency = 2400;
+		stop_frequency = 2600;
+		TUNE_STEP_MHZ = 1; 
+		OFFSET = 0;
+		amp = false; //first LNA 11dB
+		lna_gain = 0; 
+		vga_gain = 40;
+		//przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
+		//Przy 50dB poziom szumu zaczyna się podnosić.
+		//Przy 60dB juz jest 10dB wyżej.
+		baseband_filter = (1000000);
+		max_value = 0;
+		min_value = -40;
+		fir_enabled = true;
+	}
 
 	frequencies[2 * num_ranges] = (uint16_t) start_frequency;
 	frequencies[2 * num_ranges + 1] = (uint16_t) stop_frequency;
