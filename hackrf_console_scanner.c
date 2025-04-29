@@ -40,22 +40,24 @@ Pracując na surowych danych z przetwornika. Gdzie poziom 0dB to 128. To gdy po�
 dodatkowo zrobiłem wersję konsolową skanera z hackrf, aby mi się łatwo porównywało do tego co zrobiłem wczesniej. Szerokość kanału mam 2MHz. 
 Co jest niby więcej bo na tamtych miałem 1MHz. Ale  i tak selektywnośc kanałowa jest lepsza bo tutaj filtr na pośredniej jest lepszy.
 A moc obliczam z próbek IQ,  a sampluje to 20MHZ. Więc tutaj jeszcze jakiegoś IIRA można wrzucić na IQ i zmniejszyć to do 1MHZ ostro.
-
-
 */
 
 bool one_shot = false;
 bool finite_mode = false;
-const int DEFAULT_SAMPLE_RATE_HZ = (20000000); /* 20MHz default sample rate */
-const int DEFAULT_BASEBAND_FILTER_BANDWIDTH = (1000000); /* 1.75MHz default  */
+const int DEFAULT_SAMPLE_RATE_HZ = (20000000);
 const int FREQ_ONE_MHZ = (1000000ull);
+
+int max_value, min_value;
+int num_ranges = 0;
+int TUNE_STEP_MHZ ;
+int OFFSET = 0;
+unsigned int lna_gain;
+unsigned int vga_gain;
+int baseband_filter; 
 
 static bool do_exit = false;
 static hackrf_device* device = NULL;
-unsigned int lna_gain = 0, vga_gain = 40; //14
-//przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
-//Przy 50dB poziom szumu zaczyna się podnosić.
-//Przy 60dB juz jest 10dB wyżej.
+
 int iqSize = 1000;
 
 volatile uint32_t byte_count = 0;
@@ -63,22 +65,20 @@ volatile uint64_t sweep_count = 0;
 volatile bool sweep_started = false;
 uint32_t num_sweeps = 2;
 
+const int FREQ_MAX_MHZ = (7250);
 
-#define FREQ_MIN_MHZ (0)    /*    0 MHz */
-#define FREQ_MAX_MHZ (7250) /* 7250 MHz */
-
-#define BLOCKS_PER_TRANSFER 16
+const int BLOCKS_PER_TRANSFER = 16;
 
 uint16_t frequencies[MAX_SWEEP_RANGES * 2];
+
+int32_t marker_pos = 0;
+int32_t marker_range = 200;
 
 void sigint_callback_handler(int signum)
 {
 	fprintf(stderr, "Caught signal %d\n", signum);
 	do_exit = true;
 }
-
-int32_t marker_pos = 0;
-int32_t marker_range = 200;
 
 void draw_frequency_scale(void)
 {
@@ -242,7 +242,7 @@ int rx_callback(hackrf_transfer* transfer)
 		//Logarithm refered to ADC LSB 10*log(adc_rms_raw/adc_LSB)
 		float raw_log = 10*log(v_rms/1);
 		// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
-		print_colored((int16_t)(raw_log), -40, 0);
+		print_colored((int16_t)(raw_log), min_value, max_value);
 	}
 	return 0;
 }
@@ -288,13 +288,30 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
+
+
+	TUNE_STEP_MHZ = 2; 
+	OFFSET = 0;
+	frequencies[2 * num_ranges] = (uint16_t) 2400;
+	frequencies[2 * num_ranges + 1] = (uint16_t) 2600;
+	num_ranges = 1;
+	bool amp = false; //first LNA 11dB
+	lna_gain = 0; 
+	vga_gain = 40;
+	//przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
+	//Przy 50dB poziom szumu zaczyna się podnosić.
+	//Przy 60dB juz jest 10dB wyżej.
+	baseband_filter = (1000000);
+	max_value = 0;
+	min_value = -40;
+
 	fprintf(stderr,
 			"call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
-			((float) DEFAULT_BASEBAND_FILTER_BANDWIDTH / (float) FREQ_ONE_MHZ)
+			((float) baseband_filter / (float) FREQ_ONE_MHZ)
 			);
 	result = hackrf_set_baseband_filter_bandwidth(
 				device,
-				DEFAULT_BASEBAND_FILTER_BANDWIDTH
+				baseband_filter
 				);
 
 	if (result != HACKRF_SUCCESS) 
@@ -306,6 +323,7 @@ int main(int argc, char** argv)
 				);
 		return EXIT_FAILURE;
 	}
+
 
 
 	if (lna_gain % 8)
@@ -321,17 +339,9 @@ int main(int argc, char** argv)
 	}
 	result = hackrf_set_vga_gain(device, vga_gain);
 	result |= hackrf_set_lna_gain(device, lna_gain);
-	
-	int num_ranges = 0;
-	int i;
-	const int TUNE_STEP = 2; //MHZ
-	#define OFFSET    0
-	frequencies[2 * num_ranges] = (uint16_t) 2400;
-	frequencies[2 * num_ranges + 1] = (uint16_t) 2600;
-	num_ranges++;
 
-	printf("\n\rTUNE_STEP: %dMHz",TUNE_STEP);
-	for (i = 0; i < num_ranges; i++) 
+	printf("\n\rTUNE_STEP_MHZ: %dMHz",TUNE_STEP_MHZ);
+	for (int i = 0; i < num_ranges; i++) 
 	{
 		fprintf(stderr,
 			"Sweeping from %u MHz to %u MHz\n",
@@ -343,7 +353,7 @@ int main(int argc, char** argv)
 		frequencies,
 		num_ranges,
 		BYTES_PER_BLOCK,
-		TUNE_STEP * FREQ_ONE_MHZ,
+		TUNE_STEP_MHZ * FREQ_ONE_MHZ,
 		OFFSET,
 		INTERLEAVED);
 	if (result != HACKRF_SUCCESS) {
@@ -365,13 +375,9 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
-	bool amp = false;
-	uint32_t amp_enable=1;
-	
-	//To daje 14dB
 	if (amp) {
-		fprintf(stderr, "call hackrf_set_amp_enable(%u)\n", amp_enable);
-		result = hackrf_set_amp_enable(device, (uint8_t) amp_enable);
+		fprintf(stderr, "call hackrf_set_amp_enable(%u)\n", 1);
+		result = hackrf_set_amp_enable(device, (uint8_t) 1);
 		if (result != HACKRF_SUCCESS) {
 			fprintf(stderr,
 				"hackrf_set_amp_enable() failed: %s (%d)\n",
