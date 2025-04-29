@@ -140,6 +140,17 @@ void draw_header(int start_freq, int stop_freq, int step_freq)
 
 uint8_t colors_vt100[] =  {16,17,18,19,20,21,93,92,91,90,89,88,160};
 
+void print_colors_bar(int16_t min, int16_t max)
+{
+	int16_t colors_count = sizeof(colors_vt100);
+    int16_t values_per_color = (max-min)/colors_count;
+	for(int value = min; value <= max; value++)
+	{
+		int16_t color_index = (value-min)/values_per_color;
+		printf("\n\r\033[48;5;%dm%d", colors_vt100[color_index], value);
+	}
+}
+
 void print_colored(int16_t value, int16_t min, int16_t max)
 {
     int16_t colors_count = sizeof(colors_vt100);
@@ -285,38 +296,6 @@ int main(int argc, char** argv)
 	signal(SIGTERM, &sigint_callback_handler);
 	signal(SIGABRT, &sigint_callback_handler);
 
-	int	result = hackrf_init();
-	if (result != HACKRF_SUCCESS) 
-	{
-		fprintf(stderr,
-			"hackrf_init() failed: %s (%d)\n",
-			hackrf_error_name(result),
-			result);
-		return EXIT_FAILURE;
-	}
-
-	result = hackrf_open_by_serial(NULL, &device);
-	if (result != HACKRF_SUCCESS) 
-	{
-		fprintf(stderr,
-			"hackrf_open() failed: %s (%d)\n",
-			hackrf_error_name(result),
-			result);
-		return EXIT_FAILURE;
-	}
-
-	fprintf(stderr,
-			"call hackrf_sample_rate_set(%.03f MHz)\n",
-			((float) DEFAULT_SAMPLE_RATE_HZ / (float) FREQ_ONE_MHZ));
-	result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
-	if (result != HACKRF_SUCCESS) {
-		fprintf(stderr,
-			"hackrf_sample_rate_set() failed: %s (%d)\n",
-			hackrf_error_name(result),
-			result);
-		return EXIT_FAILURE;
-	}
-
 	int start_frequency;
 	int stop_frequency;
 	int step_frequency;
@@ -352,6 +331,40 @@ int main(int argc, char** argv)
 		max_value = 0;
 		min_value = -40;
 		fir_enabled = true;
+	}
+
+	print_colors_bar(min_value, max_value);
+
+	int	result = hackrf_init();
+	if (result != HACKRF_SUCCESS) 
+	{
+		fprintf(stderr,
+			"hackrf_init() failed: %s (%d)\n",
+			hackrf_error_name(result),
+			result);
+		return EXIT_FAILURE;
+	}
+
+	result = hackrf_open_by_serial(NULL, &device);
+	if (result != HACKRF_SUCCESS) 
+	{
+		fprintf(stderr,
+			"hackrf_open() failed: %s (%d)\n",
+			hackrf_error_name(result),
+			result);
+		return EXIT_FAILURE;
+	}
+
+	fprintf(stderr,
+			"call hackrf_sample_rate_set(%.03f MHz)\n",
+			((float) DEFAULT_SAMPLE_RATE_HZ / (float) FREQ_ONE_MHZ));
+	result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
+	if (result != HACKRF_SUCCESS) {
+		fprintf(stderr,
+			"hackrf_sample_rate_set() failed: %s (%d)\n",
+			hackrf_error_name(result),
+			result);
+		return EXIT_FAILURE;
 	}
 
 	frequencies[2 * num_ranges] = (uint16_t) start_frequency;
