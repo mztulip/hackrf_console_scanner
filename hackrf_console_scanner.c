@@ -147,7 +147,7 @@ void print_colors_bar(int16_t min, int16_t max)
 	for(int value = min; value <= max; value++)
 	{
 		int16_t color_index = (value-min)/values_per_color;
-		printf("\n\r\033[48;5;%dm%d", colors_vt100[color_index], value);
+		printf("\033[48;5;%dm%d|", colors_vt100[color_index], value);
 	}
 }
 
