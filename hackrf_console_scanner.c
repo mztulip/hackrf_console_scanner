@@ -14,11 +14,13 @@
 #include <errno.h>
 #include <inttypes.h>
 
+
 #if defined(__GNUC__)
 	#include <unistd.h>
 	#include <sys/time.h>
 #endif
 
+#include <termios.h>
 #include <signal.h>
 #include <math.h>
 #include "filter.h"
@@ -55,6 +57,10 @@ unsigned int lna_gain;
 unsigned int vga_gain;
 int baseband_filter; 
 bool fir_enabled = false;
+
+int start_frequency;
+int stop_frequency;
+bool amp;
 
 static bool do_exit = false;
 static hackrf_device* device = NULL;
@@ -167,6 +173,34 @@ void print_colored(int16_t value, int16_t min, int16_t max)
     printf("\033[48;5;%dm ", colors_vt100[color_index]);
 }
 
+void update_frequency_marker(uint8_t dir)
+{
+	if(dir)
+	{
+		marker_pos++;
+		if(marker_pos > marker_range)
+		{
+			marker_pos = 0;
+		}
+	}
+	else
+	{
+		marker_pos--;
+		if(marker_pos < 0)
+		{
+			marker_pos = marker_range;
+		}
+	}
+}
+
+void draw_frequency_marker(void)
+{
+	draw_frequency_scale();
+  	printf("\033[3;1H");//move cursor to row3 column1
+ 	uint32_t frequency = start_frequency+marker_pos*TUNE_STEP_MHZ;
+  	printf("Marker pos: %luMHz",frequency);
+}
+
 // http://t-filter.engineerjs.com/
 
 IIRFilter filter;
@@ -209,7 +243,12 @@ int rx_callback(hackrf_transfer* transfer)
 		
 		if (frequency == start_freq) 
 		{
+			printf("\e7"); //save cursor position
+			draw_frequency_marker();
+			printf("\e8"); //restore cursor position
+			printf("\033[0m");
 			printf("Max: %d Min: %d\n\r", (int)max_rssi, (int)min_rssi);
+		
 			min_rssi = 0;
         	max_rssi = -255;
 			if (sweep_started) 
@@ -295,6 +334,32 @@ int rx_callback(hackrf_transfer* transfer)
 	return 0;
 }
 
+char getch(void)
+{
+    char buf = 0;
+    struct termios old = {0};
+    fflush(stdout);
+    if(tcgetattr(0, &old) < 0)
+        perror("tcsetattr()");
+    old.c_lflag &= ~ICANON;
+    old.c_lflag &= ~ECHO;
+    old.c_cc[VMIN] = 0;
+    old.c_cc[VTIME] = 1; //1s timeout
+    if(tcsetattr(0, TCSANOW, &old) < 0)
+        perror("tcsetattr ICANON");
+	int result = read(0, &buf, 1);
+    if(result < 0)
+        perror("read()");
+	if (result == 0) return 0;
+    // old.c_lflag |= ICANON;
+    // old.c_lflag |= ECHO;
+    // if(tcsetattr(0, TCSADRAIN, &old) < 0)
+    //     perror("tcsetattr ~ICANON");
+    return buf;
+}
+
+
+
 int main(int argc, char** argv)
 {
 	signal(SIGINT, &sigint_callback_handler);
@@ -303,11 +368,6 @@ int main(int argc, char** argv)
 	// signal(SIGSEGV, &sigint_callback_handler);
 	// signal(SIGTERM, &sigint_callback_handler);
 	// signal(SIGABRT, &sigint_callback_handler);
-
-	int start_frequency;
-	int stop_frequency;
-	int step_frequency;
-	bool amp;
 
 	if(argc == 2 && argv[1][0] == '5')
 	{
@@ -466,7 +526,27 @@ int main(int argc, char** argv)
 	draw_header(start_frequency, stop_frequency, TUNE_STEP_MHZ);
 	while((hackrf_is_streaming(device) == HACKRF_TRUE) && (do_exit == false))
 	{
-
+		char c = getch();
+		if (c != 0)
+		{
+			// printf("\n\rChar: %c\n", c);
+			if(c == '[')
+			{
+				char c2 = getch();
+				if(c2 == 'D') //Left key
+				{
+					update_frequency_marker(0);
+				}
+				else if(c2 == 'C') //Right key
+				{
+					update_frequency_marker(1);
+				}
+			}
+			else if(c == 'r')
+			{
+				draw_header(start_frequency, stop_frequency, TUNE_STEP_MHZ);
+			}
+		}
 	}
 
 	result = hackrf_is_streaming(device);
