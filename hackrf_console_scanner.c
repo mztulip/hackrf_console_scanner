@@ -75,6 +75,9 @@ uint16_t frequencies[MAX_SWEEP_RANGES * 2];
 int32_t marker_pos = 0;
 int32_t marker_range = 200;
 
+double min_rssi = 0;
+double max_rssi = -255;
+
 void sigint_callback_handler(int signum)
 {
 	fprintf(stderr, "Caught signal %d\n", signum);
@@ -156,6 +159,7 @@ void print_colored(int16_t value, int16_t min, int16_t max)
     int16_t colors_count = sizeof(colors_vt100);
     int16_t values_per_color = (max-min)/colors_count;
     int16_t color_index = (value-min)/values_per_color;
+	if (color_index < 0) color_index = 0;
     if(color_index >= colors_count)
     {
         color_index = colors_count-1;
@@ -205,7 +209,9 @@ int rx_callback(hackrf_transfer* transfer)
 		
 		if (frequency == start_freq) 
 		{
-			printf("\n\r");
+			printf("Max: %d Min: %d\n\r", (int)max_rssi, (int)min_rssi);
+			min_rssi = 0;
+        	max_rssi = -255;
 			if (sweep_started) 
 			{
 				sweep_count++;
@@ -282,6 +288,8 @@ int rx_callback(hackrf_transfer* transfer)
 		{
 			// printf("\n\rFreq:%llu Adc log:%f", frequency, raw_log);
 			print_colored((int16_t)(raw_log), min_value, max_value);
+			if(raw_log > max_rssi) max_rssi = raw_log;
+            if(raw_log < min_rssi) min_rssi = raw_log;
 		}
 	}
 	return 0;
@@ -290,11 +298,11 @@ int rx_callback(hackrf_transfer* transfer)
 int main(int argc, char** argv)
 {
 	signal(SIGINT, &sigint_callback_handler);
-	signal(SIGILL, &sigint_callback_handler);
-	signal(SIGFPE, &sigint_callback_handler);
-	signal(SIGSEGV, &sigint_callback_handler);
-	signal(SIGTERM, &sigint_callback_handler);
-	signal(SIGABRT, &sigint_callback_handler);
+	// signal(SIGILL, &sigint_callback_handler);
+	// signal(SIGFPE, &sigint_callback_handler);
+	// signal(SIGSEGV, &sigint_callback_handler);
+	// signal(SIGTERM, &sigint_callback_handler);
+	// signal(SIGABRT, &sigint_callback_handler);
 
 	int start_frequency;
 	int stop_frequency;
@@ -307,12 +315,16 @@ int main(int argc, char** argv)
 		stop_frequency = 6000;
 		TUNE_STEP_MHZ = 5; 
 		OFFSET = 0;
-		amp = false; //first LNA 11dB
-		lna_gain = 0; 
-		vga_gain = 40;
-		baseband_filter = (5000000);
-		max_value = 0;
-		min_value = -40;
+		amp = true; //first LNA 11dB
+		//Przy 16 jest przesterowanie
+		//Pojawia sie jakiś sygnał na okolicah 5170MHZ i na lewo od tego podniesiony poziom
+		//Przy 0 wygląda lepiej choć ten prażek się  pojawia dalej. 
+		lna_gain = 8; 
+
+		vga_gain = 50;
+		baseband_filter = (2500000);
+		max_value = -20;
+		min_value = -38;
 		fir_enabled = false;
 	}
 	else
@@ -321,7 +333,7 @@ int main(int argc, char** argv)
 		stop_frequency = 2600;
 		TUNE_STEP_MHZ = 1; 
 		OFFSET = 0;
-		amp = false; //first LNA 11dB
+		amp = false; //first LNA 11dB(choć na wyswietlaczu pokazuje 14)
 		lna_gain = 0; 
 		vga_gain = 40;
 		//przy 60 juz mam mocno zawęzone. Przy 40dB jest bardzo ładnie.
@@ -329,7 +341,7 @@ int main(int argc, char** argv)
 		//Przy 60dB juz jest 10dB wyżej.
 		baseband_filter = (1000000);
 		max_value = 0;
-		min_value = -40;
+		min_value = -55;
 		fir_enabled = true;
 	}
 
